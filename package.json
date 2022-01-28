@@ -1,0 +1,15 @@
+{
+  "name": "wiki_data_collector",
+  "version": "1.0.0",
+  "description": "A data collection service to support the wikipedia client collector",
+  "main": "data_queue.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.19.1",
+    "express": "^4.17.2"
+  }
+}
