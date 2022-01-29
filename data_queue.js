@@ -23,12 +23,22 @@ const cors = require('cors');
 const app = express();
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({
+	limit: "50mb"
+}));
 app.use(bodyParser.urlencoded({
-	extended: false
+	extended: false,
+	limit: "50mb",
+	parameterLimit: 50000
 }));
 
-app.post("/signup_user", (req, res) => {
+/* ERROR MIDDLEWARE */
+app.use(function(err, req, res, next) {
+	console.error(err.stack);
+	res.status(500).send("Something broke!");
+});
+
+app.post("/signup_user", (req, res, next) => {
 	// takes in req.body:
 	// age, gender, race, education_level
 	let user_data = req.body;
@@ -39,10 +49,7 @@ app.post("/signup_user", (req, res) => {
 
 	// insert as new user
 	connection.query("INSERT INTO user (unique_id, age, gender, race, education_level) VALUES (?, ?, ?, ?, ?)", [user_unique_id, user_data.age_data, user_data.gender_data, user_data.race_data, user_data.institution_level], (err) => {
-		if (err) {
-			console.error(err);
-			return "";
-		}
+		if (err) return next(err);
 
 		res.end(user_unique_id);
 	});
@@ -52,100 +59,119 @@ app.post("/pull_view_data", (req, res) => {
 	// expects user_unique_id in req.body
 	let user_unique_id = req.body.user_unique_id;
 	if (!user_unique_id)
-		return res.end();
+		return next("no unique id");
 
-	connection.query("SELECT viewed_page, voted_page FROM user WHERE unique_id=?;", user_unique_id, (err, result) => {
-		if (err)
-			console.error(err);
+	connection.query("SELECT viewed_page, voted_page, SUM(view_vote.focus_time) AS total_time FROM user INNER JOIN view_vote ON user.id=view_vote.user_id WHERE user.unique_id=?;", user_unique_id, (err, result) => {
+		if (err || !result.length) return next(err);
 
 		res.json(result);
 	});
 });
 
-app.post("/open_page", (req, res) => {
+app.post("/open_page", (req, res, next) => {
 	// receive data about a specific page from the user
-	//console.log(req.body);
 
 	// check if page exists in current data collection
 	connection.query("SELECT id FROM page WHERE unique_id=?;", req.body.wiki_code, async (err, page_id) => {
-		if (err)
-			console.error(err);
+		if (err) return next(err);
 
-		// if it does not, create a new entry in page
-		if (!page_id.length)
-			await new Promise((resolve, reject) => {
-				connection.query("INSERT INTO page (unique_id, page_name, wiki_page) VALUES (?, ?, ?);", [req.body.wiki_code, req.body.page_title, req.body.xml_body], (err) => {
-					if (err) return reject(err);
-
-					connection.query("SELECT LAST_INSERT_ID() FROM page;", (err, new_id) => {
+		try {
+			// if it does not, create a new entry in page
+			if (!page_id.length)
+				await new Promise((resolve, reject) => {
+					connection.query("INSERT INTO page (unique_id, page_name, wiki_page) VALUES (?, ?, ?);", [req.body.wiki_code, req.body.page_title, req.body.xml_body], (err) => {
 						if (err) return reject(err);
 
-						page_id[0] = {}
-						page_id[0].id = new_id[0]["LAST_INSERT_ID()"];
-						resolve();
+						connection.query("SELECT LAST_INSERT_ID() FROM page;", (err, new_id) => {
+							if (err) return reject(err);
+
+							page_id[0] = {}
+							page_id[0].id = new_id[0]["LAST_INSERT_ID()"];
+							resolve();
+						});
 					});
 				});
-			});
 
-		page_id = page_id[0].id;
+			page_id = page_id[0].id;
 
-		// create new view_vote input
-		let user_id = await pull_id("user", req.body.unique_id);
-		let has_seen = await check_view(user_id, page_id);
+			// create new view_vote input
+			let user_id = await pull_id("user", req.body.unique_id);
+			let has_seen = await check_view(user_id, page_id);
 
-		// if user hasn't seen this page, add to view_vote
-		// and to user viewed pages
-		if (!has_seen) {
-			await new Promise((resolve, reject) => {
-				connection.query("INSERT INTO view_vote (user_id, page_id) VALUES (?, ?);", [user_id, page_id], (err) => {
-					if (err) return reject(err);
-
-					connection.query("UPDATE user SET viewed_page = (SELECT viewed_page FROM user WHERE id=?) + 1;", user_id, (err) => {
+			// if user hasn't seen this page, add to view_vote
+			// and to user viewed pages
+			if (!has_seen) {
+				await new Promise((resolve, reject) => {
+					connection.query("INSERT INTO view_vote (user_id, page_id) VALUES (?, ?);", [user_id, page_id], (err) => {
 						if (err) return reject(err);
 
-						resolve();
+						connection.query("UPDATE user SET viewed_page = (SELECT viewed_page FROM user WHERE id=?) + 1;", user_id, (err) => {
+							if (err) return reject(err);
+
+							resolve();
+						});
 					});
 				});
-			});
+			}
+
+		} catch (error) {
+			return next(error);
 		}
 
 		res.end();
 	});
 });
 
-app.post("/focus_time", async (req, res) => {
+app.post("/focus_time", async (req, res, next) => {
 	if (!req.body.user_unique_id || !req.body.page_unique_id)
-		return res.end();
+		return next("no unique id");
 
 	// pull ids
-	let user_id = await pull_id("user", req.body.user_unique_id);
-	let page_id = await pull_id("page", req.body.page_unique_id);
+	let user_id, page_id;
+	try {
+		user_id = await pull_id("user", req.body.user_unique_id);
+		page_id = await pull_id("page", req.body.page_unique_id);
+	} catch (error) {
+		return next(error);
+	}
+
+	// calculate as hours
+	req.body.add_time /= 3600;
 
 	connection.query("UPDATE view_vote SET focus_time = (SELECT focus_time FROM view_vote WHERE user_id=? AND page_id=?) + ? WHERE user_id=? AND page_id=?", [user_id, page_id, req.body.add_time, user_id, page_id], (err) => {
-		if (err) console.error(err);
+		if (err) return next(err);
 
 		res.end();
 	});
 });
 
-app.post("/vote_page", async (req, res) => {
+app.post("/vote_page", async (req, res, next) => {
 	if (!req.body.user_unique_id || !req.body.page_unique_id)
-		return res.end();
+		return next("no unique id");
 
 	// pull ids
-	let user_id = await pull_id("user", req.body.user_unique_id);
-	let page_id = await pull_id("page", req.body.page_unique_id);
+	let user_id, page_id;
+	try {
+		user_id = await pull_id("user", req.body.user_unique_id);
+		page_id = await pull_id("page", req.body.page_unique_id);
+	} catch (error) {
+		return next(error);
+	}
 
 	// pull current focus time
 	connection.query("SELECT focus_time FROM view_vote WHERE user_id=? AND page_id=?;", [user_id, page_id], (err, focus_time) => {
-		if (err) console.error(err);		
+		if (err) return next(err);
 
-		connection.query("UPDATE view_vote SET vote=?, page_vote_time=? WHERE user_id=? AND page_id=?",
-			[req.body.level, focus_time[0].focus_time, user_id, page_id], (err) => {
-				if (err) console.error(err);
+		connection.query("UPDATE view_vote SET vote=?, page_vote_time=? WHERE user_id=? AND page_id=?", [req.body.level, focus_time[0].focus_time, user_id, page_id], (err) => {
+			if (err) return next(err);
+
+			// update user voted_count
+			connection.query("UPDATE user SET voted_page=(SELECT voted_page FROM user WHERE id=?) + 1 WHERE id=?", [user_id, user_id], (err) => {
+				if (err) return next(err);
 
 				res.end();
 			});
+		});
 	});
 });
 

@@ -28,7 +28,7 @@ CREATE TABLE page (
 	id INT PRIMARY KEY AUTO_INCREMENT NOT NULL,
 	unique_id VARCHAR(20) NOT NULL,
 	page_name VARCHAR(512) NOT NULL,
-	wiki_page TEXT
+	wiki_page LONGTEXT
 );
 
 CREATE TABLE view_vote (
