@@ -37,6 +37,6 @@ CREATE TABLE view_vote (
 
 	vote INT NOT NULL DEFAULT 0, /* 1: terrible, 2: poor, 3: fine, 4: good, 5: excellent */
 
-	page_vote_time BIGINT NOT NULL DEFAULT 0, /* how many seconds before they vote */
-	focus_time BIGINT NOT NULL DEFAULT 0
+	page_vote_time DOUBLE NOT NULL DEFAULT 0, /* how many seconds before they vote */
+	focus_time DOUBLE NOT NULL DEFAULT 0
 );

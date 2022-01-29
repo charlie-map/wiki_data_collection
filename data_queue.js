@@ -64,6 +64,8 @@ app.post("/pull_view_data", (req, res) => {
 	connection.query("SELECT viewed_page, voted_page, SUM(view_vote.focus_time) AS total_time FROM user INNER JOIN view_vote ON user.id=view_vote.user_id WHERE user.unique_id=?;", user_unique_id, (err, result) => {
 		if (err || !result.length) return next(err);
 
+		result[0].total_time = result[0].total_time.toFixed(result[0].total_time > 1000 ? 2 : 3);
+
 		res.json(result);
 	});
 });
@@ -159,14 +161,16 @@ app.post("/vote_page", async (req, res, next) => {
 	}
 
 	// pull current focus time
-	connection.query("SELECT focus_time FROM view_vote WHERE user_id=? AND page_id=?;", [user_id, page_id], (err, focus_time) => {
-		if (err) return next(err);
+	connection.query("SELECT vote, focus_time FROM view_vote WHERE user_id=? AND page_id=?;", [user_id, page_id], (err, focus_time) => {
+		if (err || !focus_time.length) return next(err);
+
+		let pre_new_vote = focus_time[0].vote;
 
 		connection.query("UPDATE view_vote SET vote=?, page_vote_time=? WHERE user_id=? AND page_id=?", [req.body.level, focus_time[0].focus_time, user_id, page_id], (err) => {
 			if (err) return next(err);
 
 			// update user voted_count
-			connection.query("UPDATE user SET voted_page=(SELECT voted_page FROM user WHERE id=?) + 1 WHERE id=?", [user_id, user_id], (err) => {
+			connection.query("UPDATE user SET voted_page=(SELECT voted_page FROM user WHERE id=?) + ? WHERE id=?", [user_id, pre_new_vote == 0, user_id], (err) => {
 				if (err) return next(err);
 
 				res.end();
