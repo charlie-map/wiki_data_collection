@@ -61,8 +61,79 @@ app.post("/pull_view_data", (req, res) => {
 
 app.post("/open_page", (req, res) => {
 	// receive data about a specific page from the user
+	//console.log(req.body);
 
+	// check if page exists in current data collection
+	connection.query("SELECT id FROM page WHERE unique_id=?;", req.body.wiki_code, async (err, page_id) => {
+		if (err)
+			console.error(err);
+
+		// if it does not, create a new entry in page
+		if (!page_id.length)
+			await new Promise((resolve, reject) => {
+				connection.query("INSERT INTO page (unique_id, page_name, wiki_page) VALUES (?, ?, ?);",
+					[req.body.wiki_code, req.body.page_title, req.body.xml_body], (err) => {
+						if (err) return reject(err);
+
+						connection.query("SELECT LAST_INSERT_ID() FROM page;", (err, new_id) => {
+							if (err) return reject(err);
+
+							page_id[0] = {}
+							page_id[0].id = new_id[0]["LAST_INSERT_ID()"];
+							resolve();
+						});
+					});
+			});
+
+		page_id = page_id[0].id;
+
+		// create new view_vote input
+		let user_id = await pull_user_id(req.body.unique_id);
+		let has_seen = await check_view(user_id, page_id);
+
+		// if user hasn't seen this page, add to view_vote
+		// and to user viewed pages
+		if (!has_seen) {
+			await new Promise((resolve, reject) => {
+				connection.query("INSERT INTO view_vote (user_id, page_id) VALUES (?, ?);", [user_id, page_id], (err) => {
+					if (err) return reject(err);
+
+					connection.query("UPDATE user SET viewed_page = (SELECT viewed_page FROM user WHERE id=?) + 1;", user_id, (err) => {
+						if (err) return reject(err);
+
+						resolve();
+					});
+				});
+			});
+		}
+
+		res.end();
+	});
+});
+
+app.post("/focus_time", async (req, res) => {
 	console.log(req.body);
+
+	if (!req.body.user_unique_id || !req.body.page_unique_id)
+		return res.end();
+
+	// pull user_id
+	let user_id = await pull_user_id(req.body.user_unique_id);
+	let page_id;
+
+	connection.query("SELECT id FROM page WHERE unique_id=?;", req.body.page_unique_id, (err, page) => {
+		if (err || !page.length)
+			console.error(err);
+
+		page_id = page[0].id
+
+		connection.query("UPDATE view_vote SET focus_time = (SELECT focus_time FROM view_vote WHERE user_id=? AND page_id=?) + ? WHERE user_id=? AND page_id=?",
+			[user_id, page_id, req.body.add_time, user_id, page_id], (err) => {
+				if (err) console.error(err);
+
+				res.end();
+			});
+	});
 });
 
 app.post("/vote_page", (req, res) => {
@@ -75,3 +146,23 @@ https.createServer({
 }, app).listen(4224, () => {
 	console.log("server go vroom");
 });
+
+function pull_user_id(unique_id) {
+	return new Promise((resolve, reject) => {
+		connection.query("SELECT id FROM user WHERE unique_id=?;", unique_id, (err, res) => {
+			if (err || !res.length) return reject(err);
+
+			resolve(res[0].id);
+		});
+	});
+}
+
+function check_view(user_id, page_id) {
+	return new Promise((resolve, reject) => {
+		connection.query("SELECT vote FROM view_vote WHERE user_id=? AND page_id=?", [user_id, page_id], (err, res) => {
+			if (err) return reject(err);
+
+			resolve(res.length ? 1 : 0);
+		});
+	});
+}
