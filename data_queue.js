@@ -55,7 +55,21 @@ app.post("/signup_user", (req, res, next) => {
 	});
 });
 
-app.post("/pull_view_data", (req, res) => {
+app.post("/change_user_data", async (req, res, next) => {
+	if (!req.body.user_unique_id)
+		return next("no unique id");
+
+	let user_id = await pull_id("user", req.body.user_unique_id);
+
+	connection.query("UPDATE user SET age=?, gender=?, race=?, education_level=? WHERE id=?",
+		[req.body.age_data, req.body.gender_data, req.body.race_data, req.body.institution_level, user_id], (err) => {
+			if (err) return next(err);
+
+			res.end();
+		});
+});
+
+app.post("/pull_view_data", (req, res, next) => {
 	// expects user_unique_id in req.body
 	let user_unique_id = req.body.user_unique_id;
 	if (!user_unique_id)
@@ -63,6 +77,14 @@ app.post("/pull_view_data", (req, res) => {
 
 	connection.query("SELECT viewed_page, voted_page, SUM(view_vote.focus_time) AS total_time FROM user INNER JOIN view_vote ON user.id=view_vote.user_id WHERE user.unique_id=?;", user_unique_id, (err, result) => {
 		if (err || !result.length) return next(err);
+
+		// check for null (no pages visited yet)
+		let check_keys = Object.keys(result[0]);
+		for (let check_res = 0; check_res < 3; check_res++) {
+			if (result[0][check_keys[check_res]] == null) {
+				result[0][check_keys[check_res]] = 0;
+			}
+		}
 
 		result[0].total_time = result[0].total_time.toFixed(result[0].total_time > 1000 ? 2 : 3);
 
