@@ -1,6 +1,12 @@
+require('dotenv').config({
+	path: __dirname + "/.env"
+});
+const fs = require('fs');
+
+const https = require('https');
 const express = require('express');
 const bodyParser = require('body-parser');
-const { uuid } = require('uuidv4');
+const { v4: uuidv4 } = require('uuid');
 const mysql = require('mysql2');
 
 const connection = mysql.createConnection({
@@ -11,8 +17,11 @@ const connection = mysql.createConnection({
     insecureAuth: false
 });
 
+const cors = require('cors');
 const app = express();
 
+app.use(cors());
+app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
 app.post("/signup_user", (req, res) => {
@@ -22,19 +31,21 @@ app.post("/signup_user", (req, res) => {
 
 	// create a unique_id for the user:
 	// this assumes the user will save this uuid on their chrome browser
-	let user_unique_id = uuid();
+	let user_unique_id = uuidv4();
 
 	// insert as new user
 	connection.query("INSERT INTO user (unique_id, age, gender, race, education_level) VALUES (?, ?, ?, ?, ?)",
-		[user_unique_id, user_data.age, user_data.gender, user_data.race, user_data.education_level], (err) => {
-			if (err)
+		[user_unique_id, user_data.age_data, user_data.gender_data, user_data.race_data, user_data.institution_level], (err) => {
+			if (err) {
 				console.error(err);
+				return "";
+			}
 
 			res.end(user_unique_id);
 		});
 });
 
-app.get("/pull_view_data", (res, res) => {
+app.post("/pull_view_data", (req, res) => {
 	// expects user_unique_id in req.body
 	let user_unique_id = req.body.user_unique_id;
 	if (!user_unique_id)
@@ -48,12 +59,19 @@ app.get("/pull_view_data", (res, res) => {
 	});
 });
 
-app.post("/send_data", (req, res) => {
+app.post("/open_page", (req, res) => {
 	// receive data about a specific page from the user
 
 	console.log(req.body);
 });
 
-app.listen(4224, () => {
+app.post("/vote_page", (req, res) => {
+
+});
+
+https.createServer({
+	key: fs.readFileSync("key.pem"),
+	cert: fs.readFileSync("cert.pem")
+}, app).listen(4224, () => {
 	console.log("server go vroom");
 });

@@ -14,7 +14,7 @@ USE wiki_data;
 
 CREATE TABLE user (
 	id INT PRIMARY KEY AUTO_INCREMENT NOT NULL,
-	unique_id VARCHAR(32) NOT NULL,
+	unique_id VARCHAR(36) NOT NULL,
 	age INT NOT NULL,
 	gender VARCHAR(32),
 	race VARCHAR(64),
@@ -27,6 +27,7 @@ CREATE TABLE user (
 CREATE TABLE page (
 	id INT PRIMARY KEY AUTO_INCREMENT NOT NULL,
 	unique_id VARCHAR(20) NOT NULL,
+	page_name VARCHAR(512) NOT NULL,
 	wiki_page TEXT
 );
 
