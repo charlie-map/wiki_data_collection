@@ -40,7 +40,7 @@ app.use(function(err, req, res, next) {
 	res.status(500).send("Something broke!");
 });
 
-app.get("/privacy_policy", (req, res) => {
+app.get("/privacy-policy", (req, res) => {
 	res.sendFile(__dirname + "/views/privacy.html");
 });
 
