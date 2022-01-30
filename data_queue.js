@@ -32,10 +32,16 @@ app.use(bodyParser.urlencoded({
 	parameterLimit: 50000
 }));
 
+app.set("views", __dirname + "/views");
+
 /* ERROR MIDDLEWARE */
 app.use(function(err, req, res, next) {
 	console.error(err.stack);
 	res.status(500).send("Something broke!");
+});
+
+app.get("/privacy_policy", (req, res) => {
+	res.sendFile(__dirname + "/views/privacy.html");
 });
 
 app.post("/signup_user", (req, res, next) => {
