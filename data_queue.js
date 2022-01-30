@@ -205,8 +205,6 @@ function isPermissioned(req, res, next) {
 	let query_name = req.query.name;
 	let query_pass_code = req.query.passcode;
 
-	console.log(query_name, query_pass_code);
-
 	connection.query("SELECT string_value FROM settings WHERE name=?", query_name, (err, result) => {
 		if (err || !result.length) return res.end();
 
