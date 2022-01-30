@@ -12,6 +12,14 @@ USE wiki_data;
 	FLUSH PRIVILEGES;
 */
 
+/* stores a password which is checked for when an outside program tries to
+pull data from this service */
+CREATE TABLE settings (
+	name VARCHAR(255) NOT NULL,
+	int_value INT,
+	string_value VARCHAR(255)
+);
+
 CREATE TABLE user (
 	id INT PRIMARY KEY AUTO_INCREMENT NOT NULL,
 	unique_id VARCHAR(36) NOT NULL,

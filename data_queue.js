@@ -201,10 +201,64 @@ app.post("/vote_page", async (req, res, next) => {
 	});
 });
 
-https.createServer({
-	key: fs.readFileSync("key.pem"),
-	cert: fs.readFileSync("cert.pem")
-}, app).listen(4224, () => {
+function isPermissioned(req, res, next) {
+	let query_name = req.query.name;
+	let query_pass_code = req.query.passcode;
+
+	console.log(query_name, query_pass_code);
+
+	connection.query("SELECT string_value FROM settings WHERE name=?", query_name, (err, result) => {
+		if (err || !result.length) return res.end();
+
+		// check code match
+		if (query_pass_code != result[0].string_value)
+			return res.end();
+
+		next();
+	});
+}
+
+app.get("/pull_page_names", isPermissioned, (req, res, next) => {
+	connection.query("SELECT unique_id FROM page WHERE LENGTH(wiki_page) > 0;", (err, unique_id) => {
+		if (err) return next(err);
+
+		res.json(unique_id);
+	});
+});
+
+/* backend pull xml files */
+app.post("/pull_data", isPermissioned, async (req, res, next) => {
+	/* assumes a req.body.unique_id that has the pattern:
+		[
+			{unique_id: "Unique id of page1"},
+			{unique_id: "Unique id of page2"}
+		]
+	*/
+	if (!req.body.unique_id || !req.body.unique_id.length)
+		return next("No pages");
+
+	req.body.unique_id = JSON.parse(req.body.unique_id);
+
+	let return_val = [];
+
+	let pull_pages = req.body.unique_id.map((name) => {
+		return new Promise((resolve, reject) => {
+			connection.query("SELECT id, page_name, wiki_page FROM page WHERE unique_id=?", name.unique_id, (err, page) => {
+				if (err) return reject(err);
+
+				return_val.push(`<id>${page[0].id}</id>\n<title>${page[0].page_name}</title>\n${page[0].wiki_page}`);
+
+				resolve();
+			});
+		});
+	});
+
+	await Promise.all(pull_pages);
+
+	res.end(JSON.stringify(return_val));
+});
+
+app.listen(8822, () => {
 	console.log("server go vroom");
 });
 
