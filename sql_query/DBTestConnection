@@ -1,0 +1,4 @@
+#!/bin/bash
+curl -X GET "https://cutewiki.charlie.city/database-connect?name=PARAM_FIELD&passcode=PASSCODE_FIELD"
+
+exit 0

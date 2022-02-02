@@ -67,12 +67,11 @@ app.post("/change_user_data", async (req, res, next) => {
 
 	let user_id = await pull_id("user", req.body.user_unique_id);
 
-	connection.query("UPDATE user SET age=?, gender=?, race=?, education_level=? WHERE id=?",
-		[req.body.age_data, req.body.gender_data, req.body.race_data, req.body.institution_level, user_id], (err) => {
-			if (err) return next(err);
+	connection.query("UPDATE user SET age=?, gender=?, race=?, education_level=? WHERE id=?", [req.body.age_data, req.body.gender_data, req.body.race_data, req.body.institution_level, user_id], (err) => {
+		if (err) return next(err);
 
-			res.end();
-		});
+		res.end();
+	});
 });
 
 app.post("/pull_view_data", (req, res, next) => {
@@ -250,7 +249,7 @@ app.post("/pull_data", isPermissioned, async (req, res, next) => {
 			connection.query("SELECT id, page_name, wiki_page FROM page WHERE unique_id=?", name.unique_id, (err, page) => {
 				if (err) return reject(err);
 
-				return_val.push(`<id>${page[0].id}</id>\n<title>${page[0].page_name}</title>\n${page[0].wiki_page}`);
+				return_val.push(`<page>\n<id>${page[0].id}</id>\n<title>${page[0].page_name}</title>\n${page[0].wiki_page}\n</page>\n`);
 
 				resolve();
 			});
@@ -261,6 +260,30 @@ app.post("/pull_data", isPermissioned, async (req, res, next) => {
 
 	res.end(JSON.stringify(return_val));
 });
+
+app.post("/database-connect", isPermissioned, (req, res, next) => {
+	console.log(new Date(), "System received database check");
+	
+	connection.query("SELECT string_value FROM system_settings;", (err, value) => {
+		if (err) {
+			connection = mysql.createConnection({
+				host: process.env.HOST,
+				database: process.env.DATABASE,
+				user: process.env.WIKI_USER,
+				password: process.env.PASSWORD,
+				insecureAuth: false
+			});
+
+			connection.connect((err) => {
+				if (err) throw err;
+
+				res.end();
+			});
+		} else
+			res.end();
+	});
+});
+
 
 app.listen(8822, () => {
 	console.log("server go vroom");
