@@ -11,7 +11,7 @@ const {
 } = require('uuid');
 const mysql = require('mysql2');
 
-const connection = mysql.createConnection({
+let connection = mysql.createConnection({
 	host: process.env.HOST,
 	database: process.env.DATABASE,
 	user: process.env.WIKI_USER,
@@ -225,7 +225,13 @@ app.get("/pull_page_names", isPermissioned, (req, res, next) => {
 	connection.query("SELECT unique_id FROM page WHERE LENGTH(wiki_page) > 0;", (err, unique_id) => {
 		if (err) return next(err);
 
-		res.json(unique_id);
+		let low_level_arr = [];
+
+		for (let copy_id = 0; copy_id < unique_id.length; copy_id++) {
+			low_level_arr.push(unique_id[copy_id].unique_id);
+		}
+
+		res.end(JSON.stringify(low_level_arr));
 	});
 });
 
@@ -236,34 +242,22 @@ app.post("/pull_data", isPermissioned, async (req, res, next) => {
 			{unique_id: "Unique id of page1"},
 			{unique_id: "Unique id of page2"}
 		]
+	UPDATE: instead send a single unique_id at a time (which leaves
+		more work up the the client (which is built in C, so fast))
 	*/
-	if (!req.body.unique_id || !req.body.unique_id.length)
+	if (!req.body.unique_id)
 		return next("No pages");
 
-	req.body.unique_id = JSON.parse(req.body.unique_id);
+	connection.query("SELECT id, page_name, wiki_page FROM page WHERE unique_id=?", req.body.unique_id, (err, page) => {
+		if (err) return reject(err);
 
-	let return_val = [];
-
-	let pull_pages = req.body.unique_id.map((name) => {
-		return new Promise((resolve, reject) => {
-			connection.query("SELECT id, page_name, wiki_page FROM page WHERE unique_id=?", name.unique_id, (err, page) => {
-				if (err) return reject(err);
-
-				return_val.push(`<page>\n<id>${page[0].id}</id>\n<title>${page[0].page_name}</title>\n${page[0].wiki_page}\n</page>\n`);
-
-				resolve();
-			});
-		});
+		res.end(`<id>${page[0].id}</id>\n<title>${page[0].page_name}</title>\n${page[0].wiki_page}`);
 	});
-
-	await Promise.all(pull_pages);
-
-	res.end(JSON.stringify(return_val));
 });
 
-app.post("/database-connect", isPermissioned, (req, res, next) => {
+app.get("/database-connect", isPermissioned, (req, res, next) => {
 	console.log(new Date(), "System received database check");
-	
+
 	connection.query("SELECT string_value FROM system_settings;", (err, value) => {
 		if (err) {
 			connection = mysql.createConnection({
