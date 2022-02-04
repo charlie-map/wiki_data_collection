@@ -134,7 +134,7 @@ app.post("/open_page", (req, res, next) => {
 					connection.query("INSERT INTO view_vote (user_id, page_id) VALUES (?, ?);", [user_id, page_id], (err) => {
 						if (err) return reject(err);
 
-						connection.query("UPDATE user SET viewed_page = (SELECT viewed_page FROM user WHERE id=?) + 1;", user_id, (err) => {
+						connection.query("UPDATE user SET viewed_page = (SELECT viewed_page FROM user WHERE id=?) + 1 WHERE id=?;", [user_id, user_id], (err) => {
 							if (err) return reject(err);
 
 							resolve();
